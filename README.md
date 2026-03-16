@@ -40,6 +40,7 @@ If unset, default is `http://localhost:8065`.
 ### Post
 
 ```bash
+# Channel names and IDs both work
 mm post --channel town-square --message "hello" --account bob
 mm post --channel town-square --message "hello" --account bob --apply
 ```
