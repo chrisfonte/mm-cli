@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Command } from "commander";
 import { loginAndGetToken, type FetchLike } from "./lib/auth.js";
 import { MattermostClient, type MattermostPost } from "./lib/client.js";
@@ -234,14 +235,7 @@ export async function runCli(argv = process.argv): Promise<void> {
   }
 }
 
-const isDirectExecution = (() => {
-  if (!process.argv[1]) {
-    return false;
-  }
-
-  return import.meta.url === new URL(`file://${process.argv[1]}`).href;
-})();
-
-if (isDirectExecution) {
-  await runCli();
-}
+// Always run — this file is the CLI entry point.
+// Symlink-based invocation (npm install -g) breaks import.meta.url comparison,
+// so unconditional call is the correct pattern for a pure CLI entry point.
+await runCli();
