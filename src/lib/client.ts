@@ -126,14 +126,18 @@ export class MattermostClient {
       return input;
     }
 
-    const teams = await this.requestJson<Team[]>("/api/v4/teams");
+    const teams = await this.requestJson<Team[]>("/api/v4/users/me/teams");
     if (teams.length === 0) {
-      throw new Error("API: No teams available to resolve channel name.");
+      throw new Error(
+        "API: No user teams available to resolve channel name. Try channel id.",
+      );
     }
 
     const team = teams[0];
     if (!team) {
-      throw new Error("API: No teams available to resolve channel name.");
+      throw new Error(
+        "API: No user teams available to resolve channel name. Try channel id.",
+      );
     }
 
     const teamId = team.id;
