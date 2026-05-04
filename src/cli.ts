@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { loginAndGetToken, type FetchLike } from "./lib/auth.js";
+import { resolveAuthToken, type FetchLike } from "./lib/auth.js";
 import { MattermostClient, type MattermostPost } from "./lib/client.js";
 import { loadConfig, type MmConfig } from "./lib/config.js";
 import { printJson, printText, type JsonEnvelope } from "./lib/output.js";
@@ -72,10 +72,11 @@ async function buildClient(
   deps: RunDeps,
 ): Promise<MattermostClient> {
   const config = resolveConfig(account, deps);
-  const token = await loginAndGetToken({
+  const token = await resolveAuthToken({
     serverUrl: config.serverUrl,
     email: config.account.email,
     password: config.account.password,
+    token: config.account.token,
     fetchImpl: deps.fetchImpl,
   });
 

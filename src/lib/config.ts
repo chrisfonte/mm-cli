@@ -4,8 +4,12 @@ import { join } from "node:path";
 import yaml from "js-yaml";
 
 export interface MmAccount {
-  email: string;
-  password: string;
+  email?: string;
+  password?: string;
+  token?: string;
+  username?: string;
+  active_id?: string;
+  id?: string;
 }
 
 export interface MmConfig {
@@ -47,6 +51,20 @@ export function loadConfig(options: LoadConfigOptions = {}): MmConfig {
   if (!account) {
     throw new Error(
       `USER: Account '${selectedAccountName}' not found in credentials file.`,
+    );
+  }
+
+  const hasToken =
+    typeof account.token === "string" && account.token.length > 0;
+  const hasPasswordLogin =
+    typeof account.email === "string" &&
+    account.email.length > 0 &&
+    typeof account.password === "string" &&
+    account.password.length > 0;
+
+  if (!hasToken && !hasPasswordLogin) {
+    throw new Error(
+      `USER: Account '${selectedAccountName}' must include either token or email/password credentials.`,
     );
   }
 

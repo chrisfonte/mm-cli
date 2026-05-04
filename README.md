@@ -10,13 +10,24 @@ npm install -g github:chrisfonte/mm-cli
 
 ## Auth Setup
 
-Create credentials at `~/.credentials/mattermost/agent-accounts.yaml`:
+Create credentials at `~/.credentials/mattermost/agent-accounts.yaml`.
+
+Bearer token is preferred and supports token-only bot accounts:
+
+```yaml
+accounts:
+  venture-ceo:
+    email: agent-venture-ceo@localhost
+    token: "<mattermost personal access token or bot token>"
+```
+
+Password login remains supported as a fallback for older accounts:
 
 ```yaml
 accounts:
   bob:
     email: builder@fontasticllc.local
-    password: "GJnSTCQgttSi9SxKbE4IRA=="
+    password: "<mattermost password>"
 ```
 
 Account selection order:
@@ -34,6 +45,12 @@ export MM_URL="http://localhost:8065"
 ```
 
 If unset, default is `http://localhost:8065`.
+
+## Auth Behavior
+
+- If the selected account has `token`, `mm` uses `Authorization: Bearer <token>` directly.
+- If no `token` is present, `mm` falls back to `POST /api/v4/users/login` with `email` and `password`.
+- Accounts must provide either `token` or `email` plus `password`.
 
 ## Commands
 

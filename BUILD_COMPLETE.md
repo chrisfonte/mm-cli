@@ -7,11 +7,13 @@
 **Commit**: (see git log)
 
 ## Test Results
+
 - config: 1/1 ✅
 - auth: 1/1 ✅
 - cli: 5/5 ✅ (post dry-run, post apply, read, reply dry-run, json output)
 
 ## Validation
+
 - lint: clean
 - format: clean
 - typecheck: clean
@@ -20,5 +22,6 @@
 - apostrophe/dollar-sign safety: verified
 
 ## Deviations from spec
+
 - None. Codex wrote the source; Bob fixed npm install (Codex sandbox blocked network) and ran final validation.
 - Codex session terminated after Bob took over validation.

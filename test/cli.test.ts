@@ -7,8 +7,7 @@ const config: MmConfig = {
   serverUrl: "http://localhost:8065",
   accountName: "bob",
   account: {
-    email: "builder@fontasticllc.local",
-    password: "secret",
+    token: "token123",
   },
 };
 
@@ -33,13 +32,6 @@ describe("cli", () => {
       const url = String(input);
       calls.push({ url, init });
 
-      if (url.endsWith("/api/v4/users/login")) {
-        return new Response("", {
-          status: 200,
-          headers: { Token: "token123" },
-        });
-      }
-
       if (url.endsWith("/api/v4/posts")) {
         return new Response(
           JSON.stringify({
@@ -63,6 +55,9 @@ describe("cli", () => {
 
     const postCall = calls.find((entry) => entry.url.endsWith("/api/v4/posts"));
     expect(postCall).toBeTruthy();
+    expect(
+      calls.some((entry) => entry.url.endsWith("/api/v4/users/login")),
+    ).toBe(false);
     expect(postCall?.init?.method).toBe("POST");
     expect(postCall?.init?.body).toBe(
       JSON.stringify({
@@ -77,13 +72,6 @@ describe("cli", () => {
 
     const fetchMock = vi.fn(async (input: string | URL) => {
       const url = String(input);
-      if (url.endsWith("/api/v4/users/login")) {
-        return new Response("", {
-          status: 200,
-          headers: { Token: "token123" },
-        });
-      }
-
       if (url.includes(`/api/v4/channels/${channelId}/posts`)) {
         return new Response(
           JSON.stringify({

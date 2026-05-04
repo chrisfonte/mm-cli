@@ -10,6 +10,14 @@ export interface LoginOptions {
   fetchImpl?: FetchLike;
 }
 
+export interface ResolveAuthTokenOptions {
+  serverUrl: string;
+  email?: string;
+  password?: string;
+  token?: string;
+  fetchImpl?: FetchLike;
+}
+
 export async function loginAndGetToken(options: LoginOptions): Promise<string> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(`${options.serverUrl}/api/v4/users/login`, {
@@ -33,4 +41,25 @@ export async function loginAndGetToken(options: LoginOptions): Promise<string> {
   }
 
   return token;
+}
+
+export async function resolveAuthToken(
+  options: ResolveAuthTokenOptions,
+): Promise<string> {
+  if (typeof options.token === "string" && options.token.length > 0) {
+    return options.token;
+  }
+
+  if (!options.email || !options.password) {
+    throw new Error(
+      "AUTH: Account is missing both bearer token and email/password login credentials.",
+    );
+  }
+
+  return loginAndGetToken({
+    serverUrl: options.serverUrl,
+    email: options.email,
+    password: options.password,
+    fetchImpl: options.fetchImpl,
+  });
 }
