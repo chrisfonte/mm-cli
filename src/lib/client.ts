@@ -13,6 +13,19 @@ export interface MattermostPost {
   message: string;
 }
 
+export interface MattermostPostRecord {
+  id: string;
+  root_id: string;
+  channel_id: string;
+  channel_name?: string;
+  user_id: string;
+  author_username?: string;
+  create_at: number;
+  update_at: number;
+  message: string;
+  fetched_at: number;
+}
+
 interface Team {
   id: string;
 }
@@ -20,6 +33,11 @@ interface Team {
 interface Channel {
   id: string;
   name?: string;
+}
+
+interface UserSummary {
+  id: string;
+  username: string;
 }
 
 interface PostsByOrderResponse {
@@ -97,6 +115,10 @@ export class MattermostClient {
     );
   }
 
+  async getChannel(channelId: string): Promise<Channel> {
+    return this.requestJson<Channel>(`/api/v4/channels/${channelId}`);
+  }
+
   async getPost(postId: string): Promise<PostByIdResponse> {
     return this.requestJson<PostByIdResponse>(`/api/v4/posts/${postId}`);
   }
@@ -163,11 +185,58 @@ export class MattermostClient {
     return first.id;
   }
 
+  private async getUsersByIds(
+    userIds: string[],
+  ): Promise<Record<string, UserSummary>> {
+    if (userIds.length === 0) {
+      return {};
+    }
+
+    const users = await this.requestJson<UserSummary[]>("/api/v4/users/ids", {
+      method: "POST",
+      body: JSON.stringify(userIds),
+    });
+
+    return Object.fromEntries(users.map((user) => [user.id, user]));
+  }
+
+  private async enrichPosts(
+    posts: MattermostPost[],
+  ): Promise<MattermostPostRecord[]> {
+    const uniqueUserIds = [...new Set(posts.map((post) => post.user_id))];
+    const uniqueChannelIds = [...new Set(posts.map((post) => post.channel_id))];
+    const fetchedAt = Date.now();
+
+    const [usersById, channels] = await Promise.all([
+      this.getUsersByIds(uniqueUserIds),
+      Promise.all(
+        uniqueChannelIds.map((channelId) => this.getChannel(channelId)),
+      ),
+    ]);
+
+    const channelsById = Object.fromEntries(
+      channels.map((channel) => [channel.id, channel]),
+    );
+
+    return posts.map((post) => ({
+      id: post.id,
+      root_id: post.root_id && post.root_id.length > 0 ? post.root_id : post.id,
+      channel_id: post.channel_id,
+      channel_name: channelsById[post.channel_id]?.name,
+      user_id: post.user_id,
+      author_username: usersById[post.user_id]?.username,
+      create_at: post.create_at,
+      update_at: post.update_at ?? post.create_at,
+      message: post.message,
+      fetched_at: fetchedAt,
+    }));
+  }
+
   async readChannelPosts(
     channelId: string,
     since?: number,
     limit = 10,
-  ): Promise<MattermostPost[]> {
+  ): Promise<MattermostPostRecord[]> {
     const response = await this.requestJson<PostsByOrderResponse>(
       `/api/v4/channels/${channelId}/posts?page=0&per_page=${limit}`,
     );
@@ -178,17 +247,18 @@ export class MattermostClient {
       .map((id) => postsMap[id])
       .filter((post): post is MattermostPost => Boolean(post));
 
-    if (typeof since !== "number") {
-      return posts;
-    }
+    const filtered =
+      typeof since === "number"
+        ? posts.filter((post) => post.create_at > since)
+        : posts;
 
-    return posts.filter((post) => post.create_at > since);
+    return this.enrichPosts(filtered);
   }
 
   async searchMentions(
     username: string,
     since?: number,
-  ): Promise<MattermostPost[]> {
+  ): Promise<MattermostPostRecord[]> {
     const response = await this.requestJson<PostsByOrderResponse>(
       `/api/v4/posts/search`,
       {
@@ -206,10 +276,11 @@ export class MattermostClient {
       .map((id) => postsMap[id])
       .filter((post): post is MattermostPost => Boolean(post));
 
-    if (typeof since !== "number") {
-      return posts;
-    }
+    const filtered =
+      typeof since === "number"
+        ? posts.filter((post) => post.create_at > since)
+        : posts;
 
-    return posts.filter((post) => post.create_at > since);
+    return this.enrichPosts(filtered);
   }
 }

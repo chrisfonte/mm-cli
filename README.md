@@ -95,12 +95,27 @@ mm read --channel town-square --limit 10 --account bob
 mm read --channel town-square --since 1710000000000 --json
 ```
 
+`read --json` emits normalized records for heartbeat polling. Each record includes:
+
+- `id`
+- `root_id` (`id` for top-level posts, thread root id for replies)
+- `channel_id`
+- `channel_name` when the API can resolve it
+- `user_id`
+- `author_username` when the API can resolve it
+- `create_at`
+- `update_at`
+- `message`
+- `fetched_at`
+
 ### Mentions
 
 ```bash
 mm mentions --account bob
 mm mentions --since 1710000000000 --json
 ```
+
+`mentions --json` uses the same normalized record shape as `read --json`, so a heartbeat can persist cursors and reply targets without extra post lookups.
 
 ## Safety
 

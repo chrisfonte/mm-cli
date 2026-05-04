@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { resolveAuthToken, type FetchLike } from "./lib/auth.js";
-import { MattermostClient, type MattermostPost } from "./lib/client.js";
+import {
+  MattermostClient,
+  type MattermostPost,
+  type MattermostPostRecord,
+} from "./lib/client.js";
 import { loadConfig, type MmConfig } from "./lib/config.js";
 import { printJson, printText, type JsonEnvelope } from "./lib/output.js";
 
@@ -114,7 +118,7 @@ export async function runReply(
 export async function runRead(
   options: ReadOptions,
   deps: RunDeps = {},
-): Promise<MattermostPost[]> {
+): Promise<MattermostPostRecord[]> {
   const since = parsePositiveInt(options.since, "since");
   const limit = parsePositiveInt(options.limit, "limit") ?? 10;
   const client = await buildClient(options.account, deps);
@@ -125,7 +129,7 @@ export async function runRead(
 export async function runMentions(
   options: MentionsOptions,
   deps: RunDeps = {},
-): Promise<MattermostPost[]> {
+): Promise<MattermostPostRecord[]> {
   const since = parsePositiveInt(options.since, "since");
   const client = await buildClient(options.account, deps);
   const user = await client.getCurrentUser();
@@ -159,9 +163,9 @@ function normalizeErrorCode(error: unknown): number {
 
 function emitResult(
   command: string,
-  result: MattermostPost[] | string | MattermostPost,
+  result: MattermostPostRecord[] | MattermostPost[] | string | MattermostPost,
   json: boolean,
-): JsonEnvelope<MattermostPost> | string {
+): JsonEnvelope<MattermostPostRecord | MattermostPost> | string {
   if (json && Array.isArray(result)) {
     return printJson(command, result, { count: result.length });
   }
