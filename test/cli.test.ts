@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  runDelete,
   runMentions,
   runPost,
   runRead,
@@ -240,6 +241,163 @@ describe("cli", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("delete dry-run fetches preview metadata without calling DELETE", async () => {
+    const channelId = "abcdefghijklmnopqrstuvwxyz";
+    const fetchedAt = 1770000004567;
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+
+    vi.spyOn(Date, "now").mockReturnValue(fetchedAt);
+
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+
+      if (url.endsWith("/api/v4/posts/post123")) {
+        return new Response(
+          JSON.stringify({
+            id: "post123",
+            root_id: "root123",
+            channel_id: channelId,
+            user_id: "u1",
+            create_at: 100,
+            update_at: 120,
+            message: "duplicate cleanup candidate",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (url.endsWith(`/api/v4/channels/${channelId}`)) {
+        return new Response(
+          JSON.stringify({
+            id: channelId,
+            name: "agent-coordination",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (url.endsWith("/api/v4/users/ids")) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "u1",
+              username: "agent-bob",
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+
+      return new Response("not found", { status: 404 });
+    });
+
+    const result = await runDelete(
+      { post: "post123", apply: false },
+      { fetchImpl: fetchMock, config },
+    );
+
+    expect(result).toMatchObject({
+      post_id: "post123",
+      status: "would_delete",
+      fetched_at: fetchedAt,
+      preview: {
+        id: "post123",
+        root_id: "root123",
+        channel_name: "agent-coordination",
+        author_username: "agent-bob",
+        message: "duplicate cleanup candidate",
+      },
+    });
+    expect(
+      calls.some(
+        (entry) =>
+          entry.url.endsWith("/api/v4/posts/post123") &&
+          entry.init?.method === "DELETE",
+      ),
+    ).toBe(false);
+  });
+
+  it("delete apply calls DELETE /api/v4/posts/{id}", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+
+      if (url.endsWith("/api/v4/posts/post123")) {
+        return new Response(JSON.stringify({ id: "post123", delete_at: 321 }), {
+          status: 200,
+        });
+      }
+
+      return new Response("not found", { status: 404 });
+    });
+
+    const result = await runDelete(
+      { post: "post123", apply: true },
+      { fetchImpl: fetchMock, config },
+    );
+
+    expect(result).toMatchObject({
+      post_id: "post123",
+      status: "deleted",
+      applied_at: 321,
+      delete_response: {
+        id: "post123",
+        delete_at: 321,
+      },
+    });
+    expect(calls).toContainEqual(
+      expect.objectContaining({
+        url: "http://localhost:8065/api/v4/posts/post123",
+        init: expect.objectContaining({
+          method: "DELETE",
+        }),
+      }),
+    );
+  });
+
+  it("delete apply surfaces API errors", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response("forbidden", { status: 403, statusText: "Forbidden" }),
+    );
+
+    await expect(
+      runDelete(
+        { post: "post123", apply: true },
+        { fetchImpl: fetchMock, config },
+      ),
+    ).rejects.toThrow("API: 403 Forbidden forbidden");
+  });
+
+  it("delete apply surfaces auth errors before deletion", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response("bad credentials", {
+          status: 401,
+          statusText: "Unauthorized",
+        }),
+    );
+
+    const passwordConfig: MmConfig = {
+      serverUrl: "http://localhost:8065",
+      accountName: "bob",
+      account: {
+        email: "bob@example.com",
+        password: "wrong",
+      },
+    };
+
+    await expect(
+      runDelete(
+        { post: "post123", apply: true },
+        { fetchImpl: fetchMock, config: passwordConfig },
+      ),
+    ).rejects.toThrow("AUTH: Login failed with status 401.");
+  });
+
   it("whoami returns the current Mattermost user for token-only accounts", async () => {
     const fetchMock = vi.fn(async (input: string | URL) => {
       const url = String(input);
@@ -274,5 +432,19 @@ describe("cli", () => {
 
     expect(payload.schema_version).toBe("1.0");
     expect(payload.command).toBe("read");
+  });
+
+  it("README documents safe delete dry-run and apply examples", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const readme = await readFile(
+      new URL("../README.md", import.meta.url),
+      "utf8",
+    );
+
+    expect(readme).toContain("mm delete --post <post_id> --account bob");
+    expect(readme).toContain(
+      "mm delete --post <post_id> --account bob --apply",
+    );
+    expect(readme).toContain("`delete` is dry-run by default.");
   });
 });

@@ -26,6 +26,11 @@ export interface MattermostPostRecord {
   fetched_at: number;
 }
 
+export interface MattermostDeleteResponse {
+  id: string;
+  delete_at?: number;
+}
+
 interface Team {
   id: string;
 }
@@ -47,11 +52,6 @@ interface PostsByOrderResponse {
 
 interface SearchChannelsResponse {
   channels?: Channel[];
-}
-
-interface PostByIdResponse {
-  id: string;
-  channel_id: string;
 }
 
 export class MattermostClient {
@@ -119,8 +119,8 @@ export class MattermostClient {
     return this.requestJson<Channel>(`/api/v4/channels/${channelId}`);
   }
 
-  async getPost(postId: string): Promise<PostByIdResponse> {
-    return this.requestJson<PostByIdResponse>(`/api/v4/posts/${postId}`);
+  async getPost(postId: string): Promise<MattermostPost> {
+    return this.requestJson<MattermostPost>(`/api/v4/posts/${postId}`);
   }
 
   async createPost(
@@ -230,6 +230,38 @@ export class MattermostClient {
       message: post.message,
       fetched_at: fetchedAt,
     }));
+  }
+
+  async getPostRecord(postId: string): Promise<MattermostPostRecord> {
+    const post = await this.getPost(postId);
+    const [record] = await this.enrichPosts([post]);
+    if (!record) {
+      throw new Error(`API: Post ${postId} was not returned by Mattermost.`);
+    }
+
+    return record;
+  }
+
+  async deletePost(postId: string): Promise<MattermostDeleteResponse> {
+    const response = await this.requestAllow404(`/api/v4/posts/${postId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(
+        `API: ${response.status} ${response.statusText} ${body}`.trim(),
+      );
+    }
+
+    const text = await response.text();
+    if (!text) {
+      return {
+        id: postId,
+      };
+    }
+
+    return JSON.parse(text) as MattermostDeleteResponse;
   }
 
   async readChannelPosts(

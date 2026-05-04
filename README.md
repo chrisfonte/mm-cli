@@ -88,6 +88,16 @@ mm reply --post <root_id> --message "ack" --account bob --apply
 
 `reply` is dry-run by default. Add `--apply` to actually send.
 
+### Delete
+
+```bash
+mm delete --post <post_id> --account bob
+mm delete --post <post_id> --account bob --apply
+mm delete --post <post_id> --account bob --json
+```
+
+`delete` is dry-run by default. The dry-run path fetches post metadata when possible and shows the target channel, root id, and a message preview before deletion. Add `--apply` to actually call `DELETE /api/v4/posts/{id}`.
+
 ### Read
 
 ```bash
@@ -120,3 +130,4 @@ mm mentions --since 1710000000000 --json
 ## Safety
 
 `mm post` and `mm reply` are dry-run by default. No write API calls are made unless `--apply` is provided.
+`mm delete` follows the same pattern. Mattermost deletion is still subject to account permissions, server retention settings, and any upstream compliance/audit behavior.

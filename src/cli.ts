@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { resolveAuthToken, type FetchLike } from "./lib/auth.js";
 import {
   MattermostClient,
+  type MattermostDeleteResponse,
   type MattermostPost,
   type MattermostPostRecord,
 } from "./lib/client.js";
@@ -26,6 +27,11 @@ interface ReplyOptions extends SharedOptions {
   apply?: boolean;
 }
 
+interface DeleteOptions extends SharedOptions {
+  post: string;
+  apply?: boolean;
+}
+
 interface ReadOptions extends SharedOptions {
   channel: string;
   since?: string;
@@ -37,6 +43,18 @@ interface MentionsOptions extends SharedOptions {
 }
 
 interface WhoamiOptions extends SharedOptions {}
+
+interface DeleteCommandResult {
+  post_id: string;
+  status: "would_delete" | "deleted" | "failed";
+  fetched_at?: number;
+  applied_at?: number;
+  failed_at?: number;
+  preview?: MattermostPostRecord;
+  preview_error?: string;
+  delete_response?: MattermostDeleteResponse;
+  error?: string;
+}
 
 interface RunDeps {
   fetchImpl?: FetchLike;
@@ -115,6 +133,39 @@ export async function runReply(
   return client.createPost(rootPost.channel_id, options.message, options.post);
 }
 
+export async function runDelete(
+  options: DeleteOptions,
+  deps: RunDeps = {},
+): Promise<DeleteCommandResult> {
+  const client = await buildClient(options.account, deps);
+
+  if (!options.apply) {
+    try {
+      const preview = await client.getPostRecord(options.post);
+      return {
+        post_id: options.post,
+        status: "would_delete",
+        fetched_at: preview.fetched_at,
+        preview,
+      };
+    } catch (error) {
+      return {
+        post_id: options.post,
+        status: "would_delete",
+        preview_error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  const deleted = await client.deletePost(options.post);
+  return {
+    post_id: options.post,
+    status: "deleted",
+    applied_at: deleted.delete_at ?? Date.now(),
+    delete_response: deleted,
+  };
+}
+
 export async function runRead(
   options: ReadOptions,
   deps: RunDeps = {},
@@ -186,6 +237,54 @@ function emitResult(
   return printText(`[${result.id}] ${result.message}`);
 }
 
+function truncateMessage(message: string, maxLength = 80): string {
+  if (message.length <= maxLength) {
+    return message;
+  }
+
+  return `${message.slice(0, maxLength - 3)}...`;
+}
+
+function emitDeleteResult(
+  result: DeleteCommandResult,
+  json: boolean,
+): JsonEnvelope<DeleteCommandResult> | string {
+  if (json) {
+    return printJson("delete", [result], {
+      count: 1,
+    });
+  }
+
+  if (result.status === "deleted") {
+    return printText(`Deleted post ${result.post_id}.`);
+  }
+
+  if (result.preview) {
+    const rootId = result.preview.root_id;
+    const channel = result.preview.channel_name ?? result.preview.channel_id;
+    const preview = truncateMessage(result.preview.message);
+    return printText(
+      `DRY RUN: would delete post ${result.post_id} from #${channel} (root ${rootId}): ${preview}`,
+    );
+  }
+
+  if (result.preview_error) {
+    return printText(
+      `DRY RUN: would delete post ${result.post_id} (preview unavailable: ${result.preview_error})`,
+    );
+  }
+
+  if (result.error) {
+    return printText(
+      `Delete failed for post ${result.post_id}: ${result.error}`,
+    );
+  }
+
+  return printText(
+    `Delete result for post ${result.post_id}: ${result.status}`,
+  );
+}
+
 export async function runCli(argv = process.argv): Promise<void> {
   const program = new Command();
 
@@ -215,6 +314,36 @@ export async function runCli(argv = process.argv): Promise<void> {
     .action(async (options: ReplyOptions) => {
       const result = await runReply(options);
       emitResult("reply", result, false);
+    });
+
+  program
+    .command("delete")
+    .description("Delete a post by id")
+    .requiredOption("--post <post_id>", "Post id")
+    .option("--account <agent>", "Agent account key")
+    .option("--apply", "Execute delete operation")
+    .option("--json", "Emit JSON output envelope")
+    .action(async (options: DeleteOptions) => {
+      try {
+        const result = await runDelete(options);
+        emitDeleteResult(result, Boolean(options.json));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (options.json) {
+          printJson("delete", [
+            {
+              post_id: options.post,
+              status: "failed",
+              failed_at: Date.now(),
+              error: message,
+            },
+          ]);
+          process.exitCode = normalizeErrorCode(error);
+          return;
+        }
+
+        throw error;
+      }
     });
 
   program
