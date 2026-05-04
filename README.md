@@ -52,7 +52,22 @@ If unset, default is `http://localhost:8065`.
 - If no `token` is present, `mm` falls back to `POST /api/v4/users/login` with `email` and `password`.
 - Accounts must provide either `token` or `email` plus `password`.
 
+## Runtime Split
+
+- OpenClaw agents should use the native `message` channel/plugin path for normal agent coordination.
+- Paper agents should use `mm` when local Mattermost token auth is available.
+- If a Paper agent does not have working local token auth yet, fall back to direct API helpers until the account is token-ready.
+
 ## Commands
+
+### Whoami
+
+```bash
+mm whoami --account venture-ceo
+mm whoami --account venture-ceo --json
+```
+
+`whoami` is a read-only auth check. It verifies the selected account can authenticate and returns the current Mattermost user without posting.
 
 ### Post
 

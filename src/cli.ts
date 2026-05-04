@@ -32,6 +32,8 @@ interface MentionsOptions extends SharedOptions {
   since?: string;
 }
 
+interface WhoamiOptions extends SharedOptions {}
+
 interface RunDeps {
   fetchImpl?: FetchLike;
   config?: MmConfig;
@@ -130,6 +132,14 @@ export async function runMentions(
   return client.searchMentions(user.username, since);
 }
 
+export async function runWhoami(
+  options: WhoamiOptions,
+  deps: RunDeps = {},
+): Promise<{ id: string; username: string }> {
+  const client = await buildClient(options.account, deps);
+  return client.getCurrentUser();
+}
+
 function normalizeErrorCode(error: unknown): number {
   const message = error instanceof Error ? error.message : String(error);
   if (message.startsWith("USER:")) {
@@ -225,6 +235,21 @@ export async function runCli(argv = process.argv): Promise<void> {
     .action(async (options: MentionsOptions) => {
       const result = await runMentions(options);
       emitResult("mentions", result, Boolean(options.json));
+    });
+
+  program
+    .command("whoami")
+    .description("Verify auth and print the current Mattermost user")
+    .option("--account <agent>", "Agent account key")
+    .option("--json", "Emit JSON output envelope")
+    .action(async (options: WhoamiOptions) => {
+      const result = await runWhoami(options);
+      if (options.json) {
+        printJson("whoami", [result], { count: 1 });
+        return;
+      }
+
+      printText(`${result.username} (${result.id})`);
     });
 
   try {

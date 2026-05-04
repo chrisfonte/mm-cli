@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runPost, runRead, runReply } from "../src/cli.js";
+import { runPost, runRead, runReply, runWhoami } from "../src/cli.js";
 import { printJson } from "../src/lib/output.js";
 import type { MmConfig } from "../src/lib/config.js";
 
@@ -116,6 +116,33 @@ describe("cli", () => {
 
     expect(result).toBe("DRY RUN: would reply to root_id root123: replying");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("whoami returns the current Mattermost user for token-only accounts", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/v4/users/me")) {
+        return new Response(
+          JSON.stringify({
+            id: "user123",
+            username: "agent-venture-ceo",
+          }),
+          { status: 200 },
+        );
+      }
+
+      return new Response("not found", { status: 404 });
+    });
+
+    const result = await runWhoami(
+      { account: "venture-ceo" },
+      { fetchImpl: fetchMock, config },
+    );
+
+    expect(result).toEqual({
+      id: "user123",
+      username: "agent-venture-ceo",
+    });
   });
 
   it("output.printJson returns object with schema_version 1.0", () => {
